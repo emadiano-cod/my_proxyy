@@ -1,0 +1,48 @@
+name: Proxy with Tunnel
+
+on:
+  workflow_dispatch:
+
+jobs:
+  proxy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    
+    steps:
+    - name: Install Squid
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y squid
+        
+    - name: Install Cloudflared
+      run: |
+        wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+        sudo dpkg -i cloudflared-linux-amd64.deb
+        
+    - name: Configure Squid
+      run: |
+        sudo bash -c 'cat > /etc/squid/squid.conf << EOF
+http_port 3128
+acl localnet src 0.0.0.0/0
+http_access allow localnet
+http_access allow all
+EOF'
+        sudo systemctl restart squid
+        sudo systemctl status squid --no-pager
+        
+    - name: Start Cloudflare Tunnel
+      run: |
+        nohup cloudflared tunnel --url http://localhost:3128 > tunnel.log 2>&1 &
+        sleep 20
+        
+    - name: Display Proxy URL
+      run: |
+        echo "=========================================="
+        echo "Proxy URL:"
+        grep -oP 'https://[^\s]+\.trycloudflare\.com' tunnel.log || echo "Tunnel not ready yet"
+        echo "=========================================="
+        
+    - name: Keep Server Running
+      run: |
+        echo "Server will run for 6 hours"
+        sleep 21600
